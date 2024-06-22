@@ -1,4 +1,5 @@
 #include "main.h"
+#include "path_manager.h"
 
 #include <cstring>
 #include <string>
@@ -31,7 +32,7 @@ static LogBufferHandle LogBufferCreate(const char* name, const char* logfile_nam
 	log.logfile = NULL;
 	if (logfile_name) {
 		char path[260];
-		fopen_s(&log.logfile, GetPathInDllDir(path, logfile_name), "ab");
+		fopen_s(&log.logfile, PathInDllDir(path, sizeof(path), logfile_name), "ab");
 	}
 	auto ret = Logs.size();
 	Logs.push_back(log);
@@ -100,7 +101,7 @@ static void LogBufferSave(LogBufferHandle handle, const char* filename) {
 	FILE* f = nullptr;
 	{
 		char path[260];
-		fopen_s(&f, GetPathInDllDir(path, filename), "wb");
+		fopen_s(&f, PathInDllDir(path, sizeof(path), filename), "wb");
 	}
 	
 	if (f == nullptr) return;
@@ -132,7 +133,7 @@ static LogBufferHandle LogBufferRestore(const char* name, const char* filename) 
 
 	{
 		char path[260];
-		fopen_s(&f, GetPathInDllDir(path, filename), "r+b");
+		fopen_s(&f, PathInDllDir(path, sizeof(path), filename), "r+b");
 	}
 	if (f == nullptr) return LogBufferCreate(name, filename);
 

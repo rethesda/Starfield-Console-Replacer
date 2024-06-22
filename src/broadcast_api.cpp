@@ -1,16 +1,10 @@
 #include "main.h"
+#include "path_manager.h"
 
 #include <Windows.h>
 #include <Psapi.h>
 
 extern void BroadcastBetterAPIMessage(const struct better_api_t *API) {
-        char cur_dir[MAX_PATH]; //this will be the exe folder
-        GetCurrentDirectoryA(MAX_PATH, cur_dir);
-
-        auto cur_dir_len = (uint32_t)strlen(cur_dir);
-
-        DEBUG("Current folder: '%s'", cur_dir);
-
         DWORD needed = 0;
         EnumProcessModules(GetCurrentProcess(), NULL, 0, &needed);
 
@@ -31,11 +25,11 @@ extern void BroadcastBetterAPIMessage(const struct better_api_t *API) {
                 GetModuleFileNameA(handles[i], path, MAX_PATH);
 
                 //skip all modules that cant be mods (all dll mods would be in the game folder or a subfolder)
-                if (_strnicmp(path, cur_dir, cur_dir_len)) {
+                const char* short_path = PathWithoutCurrentDir(path);
+
+                if (!short_path) {
                         continue;
                 }
-
-                const char* short_path = path + cur_dir_len + 1; // +1 to skip '\\'
 
                 DEBUG("Checking module: '%s'", short_path); 
 

@@ -7,6 +7,7 @@
 #include "main.h"
 #include "simpledraw.h"
 #include "callback.h"
+#include "path_manager.h"
 
 
 #define SETTINGS_REGISTRY_PATH "BetterConsoleConfig.txt"
@@ -89,7 +90,7 @@ extern ConfigFile* ConfigLoadFile(const char* filename) {
         ::new (&ret->lines) decltype(ret->lines);
 
         // Open settings file
-        const auto hfile = CreateFileA(GetPathInDllDir(ret->file_path, filename), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+        const auto hfile = CreateFileA(PathInDllDir(ret->file_path, sizeof(ret->file_path), filename), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
         if (hfile == INVALID_HANDLE_VALUE) return ret; //file does not exist probably
 
         // Get size of file, make sure its < 4GB

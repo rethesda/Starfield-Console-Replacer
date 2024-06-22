@@ -1,6 +1,7 @@
 #include "main.h"
 #include "about_tab.h"
 #include "callback.h"
+#include "path_manager.h"
 
 static const auto SimpleDraw = GetBetterAPI()->SimpleDraw;
 
@@ -33,6 +34,6 @@ extern void AboutTabCallback(void*) {
         SimpleDraw->LinkButton("BetterConsole on Nexusmods", "https://www.nexusmods.com/starfield/mods/3683");
         SimpleDraw->LinkButton("Constellation by V2 (Discord)", "https://discord.gg/v2-s-collections-1076179431195955290");
         SimpleDraw->LinkButton("Linuxversion on Reddit", "https://www.reddit.com/user/linuxversion/");
-        SimpleDraw->LinkButton("Open Log File", GetPathInDllDir(max_path, "BetterConsoleLog.txt"));
-        SimpleDraw->LinkButton("Open Config File", GetPathInDllDir(max_path, "BetterConsoleConfig.txt"));
+        SimpleDraw->LinkButton("Open Log File", PathInDllDir(max_path, sizeof(max_path), "BetterConsoleLog.txt"));
+        SimpleDraw->LinkButton("Open Config File", PathInDllDir(max_path, sizeof(max_path), "BetterConsoleConfig.txt"));
 }
