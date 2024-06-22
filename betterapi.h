@@ -272,7 +272,7 @@ DLLEXPORT SFSEPluginVersionData SFSEPlugin_Version = {
 
 // Step 2) Export this function so sfse knows to load your dll.
 //         Doing anything inside the function is optional.
-DLLEXPORT void SFSEPlugin_Load(const SFSEInterface* sfse) {}
+DLLEXPORT bool SFSEPlugin_Load(const SFSEInterface* sfse) { return true; }
 
 
 // Need to undef this for the example because the example needs to include itself
