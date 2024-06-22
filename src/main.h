@@ -13,7 +13,7 @@
 
 #ifdef MODMENU_DEBUG
 extern void DebugImpl(const char* const filename, const char* const func, int line, const char* const fmt, ...) noexcept;
-extern void AssertImpl [[noreturn]] (const char* const filename, const char* const func, int line, const char* const text) noexcept;
+[[noreturn]] extern void AssertImpl (const char* const filename, const char* const func, int line, const char* const text) noexcept;
 extern void TraceImpl(const char* const filename, const char* const func, int line, const char* const fmt, ...) noexcept;
 #define DEBUG(...) do { DebugImpl(__FILE__, __func__, __LINE__, " " __VA_ARGS__); } while(0)
 #define ASSERT(CONDITION) do { if (!(CONDITION)) { AssertImpl(__FILE__, __func__, __LINE__, " " #CONDITION); } } while(0)
@@ -60,5 +60,4 @@ struct ModMenuSettings {
 
 extern const ModMenuSettings* GetSettings();
 extern ModMenuSettings* GetSettingsMutable();
-extern char* GetPathInDllDir(char* path_max_buffer, const char* filename);
 extern const BetterAPI* GetBetterAPI();

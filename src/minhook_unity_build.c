@@ -8,7 +8,9 @@
 CEXPORT FUNC_PTR minhook_hook_function(FUNC_PTR old_func, FUNC_PTR new_func) {
         static unsigned init = 0;
         if (!init) {
-                MH_Initialize();
+                if (MH_Initialize() != MH_OK) {
+                        return NULL;
+                }
                 init = 1;
         }
         FUNC_PTR ret = NULL;

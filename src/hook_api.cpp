@@ -97,7 +97,7 @@ typedef FUNC_PTR* IATEntry;
 /// </summary>
 /// <param name="dll_name">the dll name (not case sensitive) or null to search all dlls</param>
 /// <param name="func_name">the name of the dll function (same as getprocaddress would use)</param>
-/// <returns>iatentry* on success, null on failure</returns>
+/// <returns>iatentry on success, null on failure</returns>
 static IATEntry SearchIAT(const char* dll_name, const char* func_name) {
         ASSERT(func_name != NULL);
         ASSERT(*func_name != '\0');

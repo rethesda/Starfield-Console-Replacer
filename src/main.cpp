@@ -13,6 +13,7 @@
 #include "hotkeys.h"
 #include "std_api.h"
 #include "about_tab.h"
+#include "path_manager.h"
 
 #include "d3d11on12ui.h"
 
@@ -53,36 +54,13 @@ static uint32_t frame_count_since_init = 0;
 
 #define EveryNFrames(N) ((frame_count_since_init%(N))==0)
 
-static char DLL_DIR[MAX_PATH]{};
-
-extern char* GetPathInDllDir(char* path_max_buffer, const char* filename) {
-        ASSERT(DLL_DIR[0] != '\0' && "a file was opened before dll dir was setup");
-
-        char* p = path_max_buffer;
-        
-        unsigned i, j;
-
-        for (i = 0; DLL_DIR[i]; ++i) {
-                *p++ = DLL_DIR[i];
-        }
-
-        for (j = 0; filename[j]; ++j) {
-                *p++ = filename[j];
-        }
-
-        *p = 0;
-
-        return path_max_buffer;
-}
-
-
 #ifdef MODMENU_DEBUG
 struct FilenameOnly {
         const char* name;
         uint32_t name_len;
 };
 static FilenameOnly filename_only(const char* path) {
-        FilenameOnly ret{};
+        FilenameOnly ret{ path, 0 };
 
         for (uint32_t i = 0; path[i]; ++i) {
                 if (path[i] == '/' || path[i] == '\\') {
@@ -98,16 +76,37 @@ static FilenameOnly filename_only(const char* path) {
         return ret;
 }
 
+
+
+// this assert does not log to file or allocate memory
+//  its the emergency use only assert for when all else fails
+[[noreturn]] static void msg_assert(const char* message) {
+        MessageBoxA(NULL, message, "BetterConsole SUPER_ASSERT", 0);
+        abort();
+}
+#define SUPER_ASSERT(CONDITION) do{if(!(CONDITION))msg_assert(#CONDITION);}while(0)
+
+
 #include <mutex>
 std::mutex logging_mutex;
 static thread_local char format_buffer[4096];
 static constexpr auto buffer_size = sizeof(format_buffer);
 static void write_log(const char* const str) noexcept {
         static HANDLE debugfile = INVALID_HANDLE_VALUE;
+        static thread_local bool is_locked = false;
+
+        // drop logs on recursive lock
+        if (is_locked) return;
+        
         logging_mutex.lock();
+        is_locked = true;
+
         if (debugfile == INVALID_HANDLE_VALUE) {
                 char path[MAX_PATH];
-                debugfile = CreateFileA(GetPathInDllDir(path, "BetterConsoleLog.txt"), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+                PathInDllDir(path, sizeof(path), "BetterConsoleLog.txt");
+                debugfile = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+                SUPER_ASSERT(debugfile != INVALID_HANDLE_VALUE);
+                TRACE("Writing log to %s", path);
         }
         if (debugfile != INVALID_HANDLE_VALUE) {
                 WriteFile(debugfile, str, (DWORD)strnlen(str, 4096), NULL, NULL);
@@ -117,7 +116,9 @@ static void write_log(const char* const str) noexcept {
                 MessageBoxA(NULL, "Could not write to 'BetterConsoleLog.txt'", "ASSERTION FAILURE", 0);
                 abort();
         }
+
         logging_mutex.unlock();
+        is_locked = false;
 }
 extern void DebugImpl(const char* const filename, const char* const func, int line, const char* const fmt, ...) noexcept {
         const auto fn = filename_only(filename);
@@ -139,7 +140,7 @@ extern void DebugImpl(const char* const filename, const char* const func, int li
         write_log(format_buffer);
 }
 
-extern void AssertImpl [[noreturn]] (const char* const filename, const char* const func, int line, const char* const text) noexcept {
+[[noreturn]] extern void AssertImpl(const char* const filename, const char* const func, int line, const char* const text) noexcept {
         const auto fn = filename_only(filename);
         snprintf(
                 format_buffer,
@@ -297,9 +298,9 @@ static HRESULT FAKE_CreateSwapChainForHwnd(
         
         auto proc = (decltype(OLD_Wndproc))GetWindowLongPtrW(hWnd, GWLP_WNDPROC);
         if ((uint64_t)FAKE_Wndproc != (uint64_t)proc) {
-                OLD_Wndproc = proc;
-                SetWindowLongPtrW(hWnd, GWLP_WNDPROC, (LONG_PTR)FAKE_Wndproc);
                 DEBUG("Input Hook: OLD_Wndproc: %p, Current_Wndproc: %p, NEW_Wndproc: %p", OLD_Wndproc, proc, FAKE_Wndproc);
+                SetWindowLongPtrW(hWnd, GWLP_WNDPROC, (LONG_PTR)FAKE_Wndproc);
+                OLD_Wndproc = proc;
         }
         else {
                 DEBUG("WndProc already hooked");
@@ -353,7 +354,7 @@ static HRESULT FAKE_CreateSwapChainForHwnd(
                 // This is the solution I came up with. Im just going to copy all
                 // the vtable functions from whatever IDXGISwapChain that this
                 // function just created, then replace the vtable pointer of
-                // every instance of IDXGISwapChain that comes down t   he line
+                // every instance of IDXGISwapChain that comes down the line
                 // with the new vtable. Its silly but it works.
 
                 memcpy(vtable, **(void***)ppSwapChain, sizeof(vtable));
@@ -480,15 +481,6 @@ static BOOL FAKE_ClipCursor(const RECT* rect) {
 
 
 static void SetupModMenu() {
-        // use the directory of the betterconsole dll as the place to put other files
-        // NOTE: this needs to be done before any other file (logfile/config/console history) is opened
-        GetModuleFileNameA(self_module_handle, DLL_DIR, MAX_PATH);
-        char* n = DLL_DIR;
-        while (*n) ++n;
-        while ((n != DLL_DIR) && (*n != '\\')) --n;
-        ++n;
-        *n = 0;
-
         DEBUG("Initializing BetterConsole...");
         DEBUG("BetterConsole Version: " BETTERCONSOLE_VERSION);
         
@@ -514,8 +506,6 @@ static void SetupModMenu() {
         LoadSettingsRegistry();
 }
 
-extern "C" __declspec(dllexport) void SFSEPlugin_Load(const SFSEInterface*) {}
-
 
 static int OnBetterConsoleLoad(const struct better_api_t* api) {
         ASSERT(api == &API && "Betterconsole already loaded?? Do you have multiple versions of BetterConsole installed?");
@@ -538,15 +528,32 @@ static int OnBetterConsoleLoad(const struct better_api_t* api) {
         return 0;
 }
 
+extern "C" __declspec(dllexport) bool SFSEPlugin_Load(const SFSEInterface* sfse) {
+        TRACE("SFSE Loaded BetterConsole");
+        return true;
+}
+
+
+HANDLE FAKE_CreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile) {
+        if (dwFlagsAndAttributes & FILE_FLAG_NO_BUFFERING) {
+                dwFlagsAndAttributes &= ~FILE_FLAG_NO_BUFFERING;
+                dwFlagsAndAttributes &= ~FILE_FLAG_SEQUENTIAL_SCAN;
+                dwFlagsAndAttributes |= FILE_FLAG_RANDOM_ACCESS; // these large archives are randomly accessed?
+        }
+        return CreateFileW(lpFileName, dwDesiredAccess, dwShareMode, lpSecurityAttributes, dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile);
+}
+
+// We are locking the loader here waiting for the dll to be loaded
+// make sure this path is fast
 extern "C" BOOL WINAPI DllMain(HINSTANCE self, DWORD fdwReason, LPVOID) {
-        if (fdwReason == DLL_PROCESS_ATTACH) {
-                /* lock the linker/dll loader until hooks are installed, TODO: make sure this code path is fast */
-                static bool RunHooksOnlyOnce = true;
-                ASSERT(RunHooksOnlyOnce == true); //i want to know if this assert ever gets triggered
-
+        static bool init = false;
+        if (fdwReason == DLL_PROCESS_ATTACH && (init == false)) {
+                TRACE("DLL_PROCESS_ATTACH");
+                init = true;
                 //while (!IsDebuggerPresent()) Sleep(100);
+                
 
-                self_module_handle = self;
+                PathInitDllMain(self);
 
                 // just hook this one function the game needs to display graphics, then lazy hook the rest when it's called later
                 OLD_CreateDXGIFactory2 = (decltype(OLD_CreateDXGIFactory2))API.Hook->HookFunctionIAT("sl.interposer.dll", "CreateDXGIFactory2", (FUNC_PTR)FAKE_CreateDXGIFactory2);
@@ -555,7 +562,8 @@ extern "C" BOOL WINAPI DllMain(HINSTANCE self, DWORD fdwReason, LPVOID) {
                 }
                 ASSERT(OLD_CreateDXGIFactory2 != NULL);
 
-                RunHooksOnlyOnce = false;
+                // replace CreateFileW with a version that does not respect the FILE_FLAG_NO_BUFFERING flag
+                API.Hook->HookFunctionIAT(NULL, "CreateFileW", (FUNC_PTR)FAKE_CreateFileW);
         }
         return TRUE;
 }
@@ -563,6 +571,7 @@ extern "C" BOOL WINAPI DllMain(HINSTANCE self, DWORD fdwReason, LPVOID) {
 
 static HRESULT FAKE_ResizeBuffers(IDXGISwapChain3* This, UINT BufferCount, UINT Width, UINT Height, DXGI_FORMAT NewFormat, UINT SwapChainFlags) {
         if (should_show_ui) {
+                DEBUG("Releasing DX11");
                 DX11_ReleaseIfInitialized();
         }
         DEBUG("ResizeBuffers: %p, BufferCount: %u, Width: %u, Height: %u, NewFormat: %u", This, BufferCount, Width, Height, NewFormat);
@@ -590,12 +599,14 @@ static HRESULT FAKE_Present(IDXGISwapChain3* This, UINT SyncInterval, UINT Prese
         
         if (command_queue != best_match->Queue) {
                 command_queue = best_match->Queue;
+                DEBUG("Releasing DX11");
                 DX11_ReleaseIfInitialized();
         }
 
 
         if (last_swapchain != This) {
                 last_swapchain = This;
+                DEBUG("Releasing DX11");
                 DX11_ReleaseIfInitialized();
         }
         
@@ -603,10 +614,7 @@ static HRESULT FAKE_Present(IDXGISwapChain3* This, UINT SyncInterval, UINT Prese
         if (should_show_ui) {
                 DX11_InitializeOrRender(This, command_queue);
         }
-        else {
-                DX11_ReleaseIfInitialized();
-        }
-
+        
 
         // keep this detection code in place to detect breaking changes to the hook causing recursive nightmare
         static unsigned loop_check = 0;
@@ -615,7 +623,6 @@ static HRESULT FAKE_Present(IDXGISwapChain3* This, UINT SyncInterval, UINT Prese
         auto ret = OLD_Present(This, SyncInterval, PresentFlags);
         if (ret == DXGI_ERROR_DEVICE_REMOVED || ret == DXGI_ERROR_DEVICE_RESET) {
                 DEBUG("DXGI_ERROR_DEVICE_REMOVED || DXGI_ERROR_DEVICE_RESET");
-                //DX11_ReleaseIfInitialized();
         } else if (ret != S_OK) {
                 DEBUG("Swapchain::Present returned error: %u", ret);
         }
@@ -651,6 +658,7 @@ static LRESULT FAKE_Wndproc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
         }
 
         if (uMsg == WM_SIZE || uMsg == WM_CLOSE) {
+                DEBUG("Releasing DX11");
                 DX11_ReleaseIfInitialized();
         }
 
@@ -664,11 +672,17 @@ static LRESULT FAKE_Wndproc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 
 static void OnHotheyActivate(uintptr_t) {
         should_show_ui = !should_show_ui;
-        DEBUG("ui toggled");
-
+        
         if (!should_show_ui) {
                 //when you close the UI, settings are saved
+                DEBUG("ui closed");
+                DX11_ReleaseIfInitialized();
+                DEBUG("Releasing DX11");
                 SaveSettingsRegistry();
+                DEBUG("Settings saved");
+        }
+        else {
+                DEBUG("ui opened");
         }
 
         if (GetSettings()->PauseGameWhenOpened) {

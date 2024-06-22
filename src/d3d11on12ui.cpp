@@ -140,6 +140,7 @@ extern void DX11_InitializeOrRender(void* dx12_swapchain, void* dx12_commandqueu
 
         const auto index = swapchain->GetCurrentBackBufferIndex();
         if (index >= g_buffercount) {
+                DEBUG("Releasing DX11");
                 DX11_ReleaseIfInitialized();
                 return;
         }
