@@ -89,7 +89,7 @@
     <ClCompile Include="src\path_manager.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\debug.cpp">
+    <ClCompile Include="src\game_hooks.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -175,7 +175,7 @@
     <ClInclude Include="src\path_manager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\debug.h">
+    <ClInclude Include="src\game_hooks.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

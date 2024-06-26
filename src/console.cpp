@@ -170,14 +170,11 @@ static void SetGamePaused(bool paused) {
 }
 
 static uintptr_t starting_console_command(void* param_1, int* param_2) {
-        // 5 means the game is ready to run a command
-        const auto IsStartingCommand = *param_2 == 5;
-        const auto ret = OLD_StartingConsoleCommand(param_1, param_2);
         //TODO: should we register listeners for this event ?
-        if (IsStartingCommand) {
+        if (*param_2 == 5) { // 5 means the game is ready to run a command
                 StartingCommandCompleted = true;
         }
-        return ret;
+        return OLD_StartingConsoleCommand(param_1, param_2);
 }
 
 static void draw_console_window(void* imgui_context) {
